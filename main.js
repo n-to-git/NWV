@@ -101,7 +101,8 @@ function init() {
     new THREE.Vector3(0, 0, 0),
     new THREE.Vector3(0, 0, -1),
   ]);
-  const line = new THREE.Line(geometry);
+  const material= new THREE.LineBasicMaterial({color: 0xff0000});
+  const line = new THREE.Line(geometry , material);
   line.name = "line";
   line.scale.z = 5;
 
