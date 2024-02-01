@@ -6,7 +6,7 @@ import WebXRPolyfill from "webxr-polyfill";
 import { XRControllerModelFactory } from 'https://unpkg.com/three@0.150.1/examples/jsm/webxr/XRControllerModelFactory.js';
 
 //ファイル名宣言
-const fileName = "bio-CE-CX13.csv";
+const fileName = "bio-CE-CX300.csv";
 
 //データの座標範囲の上限と下限の設定
 let max = 1;
