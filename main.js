@@ -6,7 +6,7 @@ import WebXRPolyfill from "webxr-polyfill";
 import { XRControllerModelFactory } from 'https://unpkg.com/three@0.150.1/examples/jsm/webxr/XRControllerModelFactory.js';
 
 //ファイル名宣言
-const fileName = "bio-CE-CX300.csv";
+const fileName = "bio-CE-CX13.csv";
 
 //データの座標範囲の上限と下限の設定
 let max = 1;
@@ -100,7 +100,6 @@ function init() {
 
 
   /* -------------------コントローラー設定 ここから------------------- */
-  // コントローラーイベントの設定    squeeze button
   function onSelectEnd() {
     this.userData.isSelecting = false;
   }
@@ -113,8 +112,9 @@ function init() {
     new THREE.Vector3(0, 0, 0),
     new THREE.Vector3(0, 0, -1),
   ]);
-  const material= new THREE.LineBasicMaterial({color: 0xff0000});
-  const line = new THREE.Line(geometry , material);
+  //const material= new THREE.LineBasicMaterial({color: 0xff0000});
+  //const line = new THREE.Line(geometry , material);
+  const line = new THREE.Line(geometry);
   line.name = "line";
   line.scale.z = 5;
 
@@ -211,30 +211,30 @@ function init() {
   }
 
   // シェイプとコントローラのレイの交差判定
-  function intersectObjects(controller) {
-    // 選択時は無処理
-    if (controller.userData.selected !== undefined) return;
+function intersectObjects(controller) {
+  // 選択時は無処理
+  if (controller.userData.selected !== undefined) return;
 
-    // 光線の取得
-    const line = controller.getObjectByName("line");
+  // 光線の取得
+  const line = controller.getObjectByName("line");
 
-    // レイと交差しているシェイプの取得
-    const intersections = getIntersections(controller);
+  // レイと交差しているシェイプの取得
+  const intersections = getIntersections(controller);
 
-    if (intersections.length > 0) {
-      // 交差時は赤くする
-      const intersection = intersections[0];
-      const object = intersection.object;
-      object.material.emissive.r = 1;
-      intersected.push(object);
+  if (intersections.length > 0) {
+    // 交差時は赤くする
+    const intersection = intersections[0];
+    const object = intersection.object;
+    object.material.emissive.r = 1;
+    intersected.push(object);
 
-      // 交差時は光線の長さをシェイプまでにする
-      line.scale.z = intersection.distance;
-    } else {
-      // 光線の長さを固定長に戻す
-      line.scale.z = 5;
-    }
+    // 交差時は光線の長さをシェイプまでにする
+    line.scale.z = intersection.distance;
+  } else {
+    // 光線の長さを固定長に戻す
+    line.scale.z = 5;
   }
+}
 
   // ワーク行列
   const tempMatrix = new THREE.Matrix4();
@@ -285,13 +285,11 @@ function init() {
           autoSetting(networkData);
           generateRandomNodePositions(networkData, nodePositions);
           if (networkData) {
-            console.log(nodePositions);
             // ネットワークのノードとエッジを描画
             renderNetwork(networkData, group, camera, renderer, nodePositions);
           } else {
             console.error('Invalid CSV file format');
           }
-          console.log(networkData);
         } else {
           console.error('Error loading the CSV file');
         }
@@ -342,21 +340,21 @@ function init() {
 
   // 新しい座標を生成する関数
   function generateNewPosition(index, nodePosi, adjacencyMap) {
-    const previousNodePosition = index > 0 ? nodePosi[index - 1] : { x: 0, y: 0, z: 0 };
-    // 連結がない場合、ランダムに離す
-    const randomDisplacement = adjacencyMap[index].length <= 1
-      //ノードが孤立しているか、1つだけ連結している場合x、y、z 各成分は(Math.random() - 0.5) * 5の変位を加える。
-      ? { x: (Math.random() - 0.5) * coefficient, y: (Math.random() - 0.5) * coefficient, z: (Math.random() - 0.5) * coefficient }
-      //ノードが2つ以上連結している場合、変位を加えないようにする。
-      : { x: 0, y: 0, z: 0 };
+    if(adjacencyMap[index].length <= 1){
+      const previousNodePosition = index > 0 ? nodePosi[index - 1] : { x: 0, y: 0, z: 0 };
+      // 連結がない場合、ランダムに離す
+      const randomDisplacement = { x: (Math.random() - 0.5) * coefficient, y: (Math.random() - 0.5) * coefficient, z: (Math.random() - 0.5) * coefficient };
+        
 
-    const newPosition = {
-      x: previousNodePosition.x + randomDisplacement.x,
-      y: previousNodePosition.y + randomDisplacement.y,
-      z: previousNodePosition.z + randomDisplacement.z
-    };
-    // nodePositions 配列の選択されたノードの位置も更新
-    nodePositions[index] = newPosition;
+      const newPosition = {
+        x: previousNodePosition.x + randomDisplacement.x,
+        y: previousNodePosition.y + randomDisplacement.y,
+        z: previousNodePosition.z + randomDisplacement.z
+      };
+      // nodePositions 配列の選択されたノードの位置も更新
+      nodePositions[index] = newPosition;
+    }
+    
   }
 
   // ランダムな座標を生成して nodePositions 配列に追加する関数
@@ -374,6 +372,7 @@ function init() {
     uniqueNodes.forEach(node => {
       const position = createPositions();
       nodePositions.set(node, position);
+      console.log(node);
     });
 
     //葉ノードの位置を修正
@@ -413,6 +412,8 @@ function init() {
   function renderNetwork(edgesData, group, camera, renderer, nodePositions) {
     // ノードを作成
     const adjacencyMap = createAdjacencyMap(edgesData);
+    console.log(adjacencyMap);
+    console.log(nodePositions);
     Object.values(nodePositions).forEach((position, index) => {
       //ノードのジオメトリを作成
       let geometry;
@@ -420,14 +421,15 @@ function init() {
       let material;
 
       // 通常のノード
-      if (adjacencyMap[index].length <= 1) {
+      if (adjacencyMap[index].length >= 2) {
+        
+        // 通常のノード
+        geometry = new THREE.BoxGeometry(radius, radius, radius);
+        material = new THREE.MeshLambertMaterial({ color: 0x7fbfff });
+      } else {
         // 隣接していないノード
         geometry = new THREE.SphereGeometry(radius, 32, 32);
         material = new THREE.MeshLambertMaterial({ color: 0xffc0cb });
-      } else {
-        // 通常のノード
-        geometry = new THREE.BoxGeometry(radius * 2.5, radius * 2.5, radius * 2.5);
-        material = new THREE.MeshLambertMaterial({ color: 0x7fbfff });
       }
 
       const node = new THREE.Mesh(geometry, material);
@@ -487,7 +489,6 @@ function init() {
       }
 
       nodePositions[index] = newPosition;
-      //console.log(index);
     });
     //ノードとエッジを消す
     clearScene();
@@ -617,12 +618,12 @@ function init() {
 
   // 毎フレーム時に実行されるループイベント
   function tick() {
-    cleanIntersected();
+    //cleanIntersected();
     intersectObjects(controller0);
     intersectObjects(controller1);
     
-    handleController(controller1);
     handleController(controller0);
+    handleController(controller1);
     // レンダリング
     renderer.render(scene, camera);
   }
