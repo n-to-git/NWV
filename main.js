@@ -4,9 +4,13 @@ import * as THREE from 'three';
 import { VRButton } from "three/addons/webxr/VRButton.js";
 import WebXRPolyfill from "webxr-polyfill";
 import { XRControllerModelFactory } from 'https://unpkg.com/three@0.150.1/examples/jsm/webxr/XRControllerModelFactory.js';
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 //ファイル名宣言
 const fileName = "bio-CE-CX300.csv";
+
+//OrbitControls(マウスで動かせる設定)の設定
+const cameraControl = false; //true:有効　false:無効
 
 //データの座標範囲の上限と下限の設定
 let max = 1;
@@ -20,11 +24,12 @@ let nodePositions = [];
 let networkData;
 
 //ノードの離す大きさ
-const coefficient = 10;
+const coefficient = 20;
 
 //半径
 let radius = 0.2;
 
+/*　けしてもOK */
 //自動設定
 //範囲
 const autoRangeSetting = true; //true:データの数に応じて範囲を設定　false:グローバル変数を参照
@@ -79,7 +84,34 @@ function init() {
   
   /* --------------- 基本的な設定 ここまで --------------- */
 
+
+
+  /* --------------- OrbitControls(マウスで動かせる設定)ここから --------------- */
+  if(cameraControl){
+    // OrbitControlsの作成
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true; // ダンピングまたは自動回転が有効な場合、アニメーションループが必要です
+    controls.dampingFactor = 0.25;
+    controls.screenSpacePanning = false;
+    controls.maxPolarAngle = Math.PI / 2;
+    // VRモードのフラグ
+    let inVRMode = false;
+    // VRButtonのイベントリスナーを使用してVRモードの開始と終了を検知
+    VRButton.createButton(renderer).addEventListener('selectstart', function () {
+      // VRモードが開始された時の処理
+      inVRMode = true;
+      controls.enabled = false; // OrbitControlsを無効にする
+    });
+
+    VRButton.createButton(renderer).addEventListener('selectend', function () {
+      // VRモードが終了した時の処理
+      inVRMode = false;
+      controls.enabled = true; // OrbitControlsを有効にする
+    });
+  }
+  /* --------------- OrbitControls(マウスで動かせる設定)ここまで --------------- */
   
+
   
   /* --------------- 光源設定 ここから --------------- */
   // 光源を作成
@@ -339,13 +371,16 @@ function intersectObjects(controller) {
   }
 
   // 新しい座標を生成する関数
-  function generateNewPosition(index, nodePosi, adjacencyMap) {
+  function generateNewPosition(index, nodePosition, adjacencyMap) {
     if(adjacencyMap[index].length <= 1){
-      const previousNodePosition = index > 0 ? nodePosi[index - 1] : { x: 0, y: 0, z: 0 };
+      const previousNodePosition = index > 0 ? nodePosition[index - 1] : { x: 0, y: 0, z: 0 };
       // 連結がない場合、ランダムに離す
-      const randomDisplacement = { x: (Math.random() - 0.5) * coefficient, y: (Math.random() - 0.5) * coefficient, z: (Math.random() - 0.5) * coefficient };
+      const randomDisplacement = { 
+        x: (Math.random() - 0.5) * coefficient, 
+        y: (Math.random() - 0.5) * coefficient, 
+        z: (Math.random() - 0.5) * coefficient 
+      };
         
-
       const newPosition = {
         x: previousNodePosition.x + randomDisplacement.x,
         y: previousNodePosition.y + randomDisplacement.y,
@@ -358,7 +393,7 @@ function intersectObjects(controller) {
   }
 
   // ランダムな座標を生成して nodePositions 配列に追加する関数
-  function generateRandomNodePositions(edgesData,nodePosi) {
+  function generateRandomNodePositions(edgesData,nodePosition) {
     const uniqueNodes = new Set();
     const nodePositions = new Map();
 
@@ -372,13 +407,12 @@ function intersectObjects(controller) {
     uniqueNodes.forEach(node => {
       const position = createPositions();
       nodePositions.set(node, position);
-      console.log(node);
     });
 
     //葉ノードの位置を修正
     const adjacencyMap = createAdjacencyMap(edgesData);
-    Object.values(nodePosi).forEach((position, index) => {
-      generateNewPosition(index, nodePosi , adjacencyMap);
+    Object.values(nodePosition).forEach((position, index) => {
+      generateNewPosition(index, nodePosition , adjacencyMap);
     });
   }
   /* -------------------座標生成 ここまで------------------- */
@@ -413,23 +447,28 @@ function intersectObjects(controller) {
     // ノードを作成
     const adjacencyMap = createAdjacencyMap(edgesData);
     console.log(adjacencyMap);
-    console.log(nodePositions);
     Object.values(nodePositions).forEach((position, index) => {
       //ノードのジオメトリを作成
       let geometry;
       //ノードのマテリアルを作成
       let material;
 
-      // 通常のノード
+      // 2つ以上のノードがつながっているノード
       if (adjacencyMap[index].length >= 2) {
-        
-        // 通常のノード
-        geometry = new THREE.BoxGeometry(radius, radius, radius);
+        // 2通常のノード
+        geometry = new THREE.BoxGeometry(radius*2, radius*2, radius*2);
         material = new THREE.MeshLambertMaterial({ color: 0x7fbfff });
       } else {
-        // 隣接していないノード
-        geometry = new THREE.SphereGeometry(radius, 32, 32);
-        material = new THREE.MeshLambertMaterial({ color: 0xffc0cb });
+        // 1つしかノードがつながっていない葉ノード
+        if(adjacencyMap[adjacencyMap[index]].length >=2){
+          //1つ前のノードが2つ以上のノードがつながっているノード
+          geometry = new THREE.SphereGeometry(radius, 32, 32);
+          material = new THREE.MeshLambertMaterial({ color: 0xffc0cb });
+        }else{
+          //1つ前のノードが自分自身としかつながっていないノード
+          geometry =  new THREE.TetrahedronGeometry();
+          material = new THREE.MeshLambertMaterial({ color: 0xa4eba4 });
+        }
       }
 
       const node = new THREE.Mesh(geometry, material);
@@ -469,7 +508,7 @@ function intersectObjects(controller) {
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
   }
-  /* ------------------- 隣接リストを作成 ここまで------------------- */
+  /* ------------------- リサイズ処理 ここまで------------------- */
 
 
 
@@ -490,6 +529,13 @@ function intersectObjects(controller) {
 
       nodePositions[index] = newPosition;
     });
+    
+    //葉ノードの位置を修正
+    const adjacencyMap = createAdjacencyMap(networkData);
+    Object.values(nodePositions).forEach((position, index) => {
+      generateNewPosition(index, nodePositions , adjacencyMap);
+    });
+
     //ノードとエッジを消す
     clearScene();
     //変更されたノードの位置を再描画
@@ -532,6 +578,31 @@ function intersectObjects(controller) {
       // レンダリング
       renderer.render(scene, camera);
     }
+  }
+
+  function updateAllRandomNode() {
+    nodePositions.forEach((position, index) => {
+      const newPosition = {
+        x: Math.random() * (max + 1 - min) + min,
+        y: Math.random() * (max + 1 - min) + min,
+        z: Math.random() * (max + 1 - min) + min
+      };
+
+      const node = scene.children.find((child) => child instanceof THREE.Mesh && child.position.equals(position));
+      if (node) {
+        node.position.set(newPosition.x, newPosition.y, newPosition.z);
+      }
+
+      nodePositions[index] = newPosition;
+    });
+    
+    //ノードとエッジを消す
+    clearScene();
+    //変更されたノードの位置を再描画
+    renderNetwork(networkData, group, camera, renderer, nodePositions);
+
+    // レンダリング
+    renderer.render(scene, camera);
   }
   /* -------------------座標の更新 ここまで------------------- */
 
@@ -601,6 +672,9 @@ function intersectObjects(controller) {
     }else if(event.key === 'a'){
       // 'a' キーが押されたときにすべてのノードの位置を更新する関数
       updateAllNode();
+    }else if(event.key === 'f'){
+      // 'f' キーが押されたときにすべてのノードの位置を完全ランダムに更新する関数
+      updateAllRandomNode();
     }else if(event.key === 'p'){
       //'p' キーが押されたときにconsoleにノードの座標を表示する
       console.log(nodePositions);
@@ -612,13 +686,15 @@ function intersectObjects(controller) {
       renderNetwork(networkData, group, camera, renderer, nodePositions);
     }
   });
+
+  
   /* -------------------キーボード操作設定 ここまで------------------- */
 
 
 
   // 毎フレーム時に実行されるループイベント
   function tick() {
-    //cleanIntersected();
+    cleanIntersected();
     intersectObjects(controller0);
     intersectObjects(controller1);
     
